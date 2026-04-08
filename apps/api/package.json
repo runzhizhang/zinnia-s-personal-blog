@@ -1,0 +1,35 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "build": "echo \"api runs directly in Node\"",
+    "test": "cross-env NODE_ENV=test node --test src/tests"
+  },
+  "dependencies": {
+    "@personal-blog/db": "file:../../packages/db",
+    "@personal-blog/shared": "file:../../packages/shared",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.43.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ioredis": "^5.4.2",
+    "jsonwebtoken": "^9.0.2",
+    "marked": "^15.0.7",
+    "minio": "^8.0.5",
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.3",
+    "pdfkit": "^0.16.0"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.9",
+    "supertest": "^7.1.0"
+  }
+}

@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PostType {
+  text
+  image
+  video
+  audio
+  link
+}
+
+enum Visibility {
+  public
+  password
+  private
+}
+
+enum InteractionType {
+  comment
+  reaction
+}
+
+enum BackupType {
+  auto
+  manual
+}
+
+enum BackupFormat {
+  json
+  markdown
+  pdf
+}
+
+enum BackupStatus {
+  queued
+  running
+  success
+  failed
+}
+
+model User {
+  id            String      @id @default(cuid())
+  username      String      @unique
+  email         String      @unique
+  passwordHash  String
+  avatar        String?
+  settings      Json?
+  backupConfig  Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  posts         Post[]
+  interactions  Interaction[]
+  backupJobs    BackupJob[]
+}
+
+model Post {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  title         String?
+  content       String
+  htmlRendered  String?
+  type          PostType      @default(text)
+  visibility    Visibility    @default(public)
+  password      String?
+  tags          PostTag[]
+  location      Json?
+  isDraft       Boolean       @default(false)
+  scheduledAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+  medias        Media[]
+  interactions  Interaction[]
+  versions      PostVersion[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([deletedAt])
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  posts     PostTag[]
+  createdAt DateTime  @default(now())
+}
+
+model PostTag {
+  postId String
+  tagId  String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  postId      String
+  post        Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type        String
+  url         String
+  thumbnail   String?
+  metadata    Json?
+  storagePath String
+  createdAt   DateTime @default(now())
+}
+
+model Interaction {
+  id        String          @id @default(cuid())
+  postId    String
+  post      Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  visitorId String?
+  visitor   User?           @relation(fields: [visitorId], references: [id])
+  type      InteractionType
+  content   String?
+  ipHash    String?
+  reactionKey String?       @unique
+  parentId  String?
+  parent    Interaction?    @relation("InteractionThread", fields: [parentId], references: [id])
+  children  Interaction[]   @relation("InteractionThread")
+  createdAt DateTime        @default(now())
+}
+
+model PostVersion {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model BackupJob {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type            BackupType
+  format          BackupFormat
+  storageLocation String?
+  fileSize        Int?
+  status          BackupStatus @default(queued)
+  errorLog        String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}

@@ -1,0 +1,8 @@
+-- Add this after running standard Prisma migration:
+--   ALTER TABLE "Interaction" ADD COLUMN "reactionKey" TEXT;
+--   CREATE UNIQUE INDEX "Interaction_reactionKey_key" ON "Interaction"("reactionKey");
+--
+-- Existing reaction rows backfill example:
+-- UPDATE "Interaction"
+-- SET "reactionKey" = CONCAT('reaction:', "postId", ':', COALESCE("content", ''), ':', COALESCE("ipHash", ''))
+-- WHERE "type" = 'reaction' AND "reactionKey" IS NULL;
