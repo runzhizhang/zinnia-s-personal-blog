@@ -10,7 +10,7 @@
     "dev:web": "npm run dev -w web",
     "dev:api": "npm run dev -w api",
     "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
-    "build": "npm run build -w shared && npm run build -w db && npm run build -w api && npm run build -w web",
+    "build": "npm run build -w @personal-blog/shared && npm run build -w @personal-blog/db && npm run build -w api && npm run build -w web",
     "test": "npm run test -ws --if-present",
     "test:e2e": "playwright test"
   },
