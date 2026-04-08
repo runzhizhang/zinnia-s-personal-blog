@@ -1,35 +1,94 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiFetch } from "../../components/api";
+import { AUTH_CHANGE_EVENT } from "../../hooks/useAuthStatus";
+import { IconEnter } from "../../components/icons";
+import { message } from "antd";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("admin@personal-blog.local");
+  const router = useRouter();
+  const [account, setAccount] = useState("admin@personal-blog.local");
   const [password, setPassword] = useState("admin123456");
-  const [message, setMessage] = useState("");
+  const [messageApi, contextHolder] = message.useMessage();
 
   async function login() {
     try {
+      const trimmed = account.trim();
+      const body = trimmed.includes("@")
+        ? { email: trimmed, password }
+        : { username: trimmed, password };
+
       const data = await apiFetch("/api/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(body),
       });
       localStorage.setItem("token", data.token);
-      setMessage("登录成功，已保存 token");
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
+      window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+      messageApi.success("登录成功");
+      setTimeout(() => {
+        router.push("/");
+      }, 1000);
     } catch (error) {
-      setMessage(`登录失败: ${error.message}`);
+      messageApi.error(`登录失败: ${error.message}`);
     }
   }
 
   return (
-    <main className="card">
-      <h2 style={{ marginTop: 0 }}>登录</h2>
-      <div className="toolbar">
-        <input data-testid="login-email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input data-testid="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button data-testid="login-submit" onClick={login}>登录</button>
+    <main className="login-page">
+      {contextHolder}
+      <div className="login-panel">
+        <h1 className="login-title">欢迎回来</h1>
+        <p className="login-subtitle">登录以发布和管理你的文章</p>
+
+        <form
+          className="login-form"
+          autoComplete="off"
+          onSubmit={(e) => {
+            e.preventDefault();
+            login();
+          }}
+        >
+          <div className="login-field">
+            <label htmlFor="login-account">用户名</label>
+            <input
+              id="login-account"
+              data-testid="login-email"
+              type="text"
+              name="blog-login-account"
+              autoComplete="off"
+              placeholder="请输入用户名"
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+            />
+          </div>
+          <div className="login-field">
+            <label htmlFor="login-password">密码</label>
+            <input
+              id="login-password"
+              data-testid="login-password"
+              type="password"
+              name="blog-login-password"
+              autoComplete="off"
+              placeholder="请输入密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <button
+            type="submit"
+            className="login-submit"
+            data-testid="login-submit"
+          >
+            <IconEnter width={20} height={20} />
+            登录
+          </button>
+        </form>
       </div>
-      {message ? <p>{message}</p> : null}
     </main>
   );
 }

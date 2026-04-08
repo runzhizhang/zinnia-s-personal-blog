@@ -1,4 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+export { API_BASE };
 
 export async function apiFetch(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -20,5 +21,8 @@ export async function apiFetch(path, options = {}) {
     }
     throw new Error(message);
   }
-  return response.json();
+  if (response.status === 204) return null;
+  const text = await response.text();
+  if (!text) return null;
+  return JSON.parse(text);
 }

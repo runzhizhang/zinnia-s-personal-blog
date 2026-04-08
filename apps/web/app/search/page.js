@@ -2,19 +2,19 @@
 
 import { useState } from "react";
 import { apiFetch } from "../../components/api";
+import { useModal } from "../../components/ModalProvider";
 
 export default function SearchPage() {
+  const { alert } = useModal();
   const [q, setQ] = useState("");
   const [items, setItems] = useState([]);
-  const [error, setError] = useState("");
 
   async function doSearch() {
     try {
-      setError("");
       const result = await apiFetch(`/api/posts/search?q=${encodeURIComponent(q)}`);
       setItems(result);
     } catch (e) {
-      setError(e.message);
+      await alert({ message: e.message });
     }
   }
 
@@ -28,7 +28,6 @@ export default function SearchPage() {
           <button onClick={doSearch}>搜索</button>
         </div>
       </section>
-      {error ? <p>{error}</p> : null}
       {items.map((item) => (
         <article className="card" key={item.id}>
           <h3 style={{ marginTop: 0 }}>{item.title || "无标题"}</h3>

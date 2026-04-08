@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { apiFetch } from "../../components/api";
+import { useModal } from "../../components/ModalProvider";
 
 export default function SettingsPage() {
+  const { alert } = useModal();
   const [format, setFormat] = useState("json");
-  const [message, setMessage] = useState("");
 
   async function triggerExport() {
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        setMessage("请先登录后再操作");
+        await alert({ message: "请先登录后再操作" });
         return;
       }
       const job = await apiFetch("/api/export", {
@@ -19,9 +20,9 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({ format })
       });
-      setMessage(`导出任务已创建: ${job.id}`);
+      await alert({ message: `导出任务已创建: ${job.id}` });
     } catch (error) {
-      setMessage(`创建失败: ${error.message}`);
+      await alert({ message: `创建失败: ${error.message}` });
     }
   }
 
@@ -38,7 +39,6 @@ export default function SettingsPage() {
           </select>
           <button onClick={triggerExport}>手动导出</button>
         </div>
-        {message ? <p>{message}</p> : null}
       </section>
     </main>
   );

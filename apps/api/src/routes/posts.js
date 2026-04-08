@@ -12,6 +12,12 @@ function toTagConnect(tags = []) {
   }));
 }
 
+function toHtmlRendered(content = "") {
+  const value = String(content);
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(value);
+  return looksLikeHtml ? value : marked.parse(value);
+}
+
 router.get("/", async (req, res) => {
   const { page = 1, pageSize = 10, tag } = req.query;
   const skip = (Number(page) - 1) * Number(pageSize);
@@ -38,7 +44,7 @@ router.post("/", requireAuth, async (req, res) => {
       userId: req.user.userId,
       title: data.title,
       content: data.content,
-      htmlRendered: marked.parse(data.content),
+      htmlRendered: toHtmlRendered(data.content),
       type: data.type,
       visibility: data.visibility,
       password: data.password,
@@ -55,7 +61,12 @@ router.post("/", requireAuth, async (req, res) => {
 router.get("/:id", async (req, res) => {
   const post = await prisma.post.findUnique({
     where: { id: req.params.id },
-    include: { tags: { include: { tag: true } }, medias: true, interactions: true }
+    include: {
+      user: { select: { username: true } },
+      tags: { include: { tag: true } },
+      medias: true,
+      interactions: true
+    }
   });
   if (!post || post.deletedAt) return res.status(404).json({ message: "Not found" });
   return res.json(post);
@@ -65,7 +76,8 @@ router.patch("/:id", requireAuth, async (req, res) => {
   const parsed = postInputSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
   const exists = await prisma.post.findUnique({ where: { id: req.params.id } });
-  if (!exists) return res.status(404).json({ message: "Not found" });
+  if (!exists || exists.deletedAt) return res.status(404).json({ message: "Not found" });
+  if (exists.userId !== req.user.userId) return res.status(403).json({ message: "Forbidden" });
 
   await prisma.postVersion.create({ data: { postId: exists.id, content: exists.content } });
   const data = parsed.data;
@@ -73,7 +85,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     where: { id: req.params.id },
     data: {
       ...data,
-      htmlRendered: data.content ? marked.parse(data.content) : undefined,
+      htmlRendered: data.content ? toHtmlRendered(data.content) : undefined,
       tags: data.tags ? { deleteMany: {}, create: toTagConnect(data.tags) } : undefined
     },
     include: { tags: { include: { tag: true } } }
@@ -82,6 +94,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
 });
 
 router.delete("/:id", requireAuth, async (req, res) => {
+  const exists = await prisma.post.findUnique({ where: { id: req.params.id } });
+  if (!exists || exists.deletedAt) return res.status(404).json({ message: "Not found" });
+  if (exists.userId !== req.user.userId) return res.status(403).json({ message: "Forbidden" });
   await prisma.post.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
   return res.status(204).send();
 });

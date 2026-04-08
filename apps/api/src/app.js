@@ -20,8 +20,9 @@ app.use(morgan("dev"));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
-app.use("/api/posts", postsRoutes);
+// 必须先于 /api/posts，否则 GET /api/posts/search 会被 /:id 当成 id=search
 app.use("/api/posts/search", searchRoutes);
+app.use("/api/posts", postsRoutes);
 app.use("/api/tags", tagsRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/export", exportRoutes);

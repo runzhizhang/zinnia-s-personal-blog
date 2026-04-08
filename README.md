@@ -36,9 +36,8 @@
 - `POST /api/media/presign`
 - `POST /api/media/callback`
 - `POST /api/export`
-- `GET /api/interactions/posts/:postId`
-- `POST /api/interactions/posts/:postId/comments`
-- `POST /api/interactions/posts/:postId/reactions`
+- `GET /api/interactions/posts/:postId`（仅返回点赞统计）
+- `POST /api/interactions/posts/:postId/reactions`（仅支持 👍）
 - `DELETE /api/interactions/:id`
 - `GET /rss.xml`
 

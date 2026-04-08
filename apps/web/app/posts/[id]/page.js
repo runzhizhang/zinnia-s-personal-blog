@@ -1,137 +1,175 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "../../../components/api";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { API_BASE, apiFetch } from "../../../components/api";
+import { useAuthStatus } from "../../../hooks/useAuthStatus";
+import { useModal } from "../../../components/ModalProvider";
+import { IconCalendar, IconPencil, IconTrash, IconUser } from "../../../components/icons";
+
+function formatPostDate(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function normalizeMediaUrl(html = "") {
+  return String(html).replace(
+    /https?:\/\/localhost:9000\/media\/([^"'()\s<]+)/g,
+    (_m, objectPath) => `${API_BASE}/api/media/file/${objectPath}`
+  );
+}
 
 export default function PostDetailPage({ params }) {
+  const router = useRouter();
+  const { alert, confirm } = useModal();
+  const { loggedIn, user } = useAuthStatus();
   const [post, setPost] = useState(null);
-  const [interactions, setInteractions] = useState({ comments: [], commentTree: [], reactions: [] });
-  const [comment, setComment] = useState("");
-  const [replyParentId, setReplyParentId] = useState(null);
-  const [collapsed, setCollapsed] = useState({});
-  const [message, setMessage] = useState("");
-  const reactionTestIds = { "👍": "reaction-up", "❤️": "reaction-love", "💡": "reaction-idea", "🤔": "reaction-think" };
+  const [reactions, setReactions] = useState([]);
+  const reactionTestId = "reaction-up";
 
   async function load() {
     const postData = await apiFetch(`/api/posts/${params.id}`);
     const interactionData = await apiFetch(`/api/interactions/posts/${params.id}`);
     setPost(postData);
-    setInteractions(interactionData);
+    setReactions(interactionData.reactions || []);
   }
 
   useEffect(() => {
-    load().catch((error) => setMessage(error.message));
+    load().catch(async (error) => {
+      await alert({ message: error.message });
+      router.push("/");
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
-  async function sendReaction(emoji) {
+  useEffect(() => {
+    if (!post) return;
+    const html = post.htmlRendered || post.content || "";
+    const imageCount = (String(html).match(/<img[\s\S]*?>/g) || []).length;
+    console.info("[post-detail] content diagnostics", {
+      postId: post.id,
+      hasHtmlRendered: Boolean(post.htmlRendered),
+      htmlLength: String(html).length,
+      imageCount
+    });
+  }, [post]);
+
+  async function sendLike() {
     try {
       await apiFetch(`/api/interactions/posts/${params.id}/reactions`, {
         method: "POST",
-        body: JSON.stringify({ emoji })
+        body: JSON.stringify({ emoji: "👍" }),
       });
       await load();
     } catch (error) {
-      setMessage(error.message);
+      await alert({ message: error.message });
     }
   }
 
-  async function sendComment() {
+  const isOwner =
+    loggedIn && user?.id && post?.userId && post.userId === user.id;
+
+  async function deletePost() {
+    if (!(await confirm({ message: "确定删除这篇文章？" }))) return;
     try {
-      await apiFetch(`/api/interactions/posts/${params.id}/comments`, {
-        method: "POST",
-        body: JSON.stringify({ content: comment, parentId: replyParentId || undefined })
+      const token = localStorage.getItem("token");
+      await apiFetch(`/api/posts/${params.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
-      setComment("");
-      setReplyParentId(null);
-      await load();
+      router.push("/");
     } catch (error) {
-      setMessage(error.message);
+      await alert({ message: error.message });
     }
   }
 
-  function countNestedReplies(node) {
-    const children = node.children || [];
-    return children.reduce((sum, child) => sum + 1 + countNestedReplies(child), 0);
-  }
-
-  function CommentNode({ node, depth = 0 }) {
-    const childCount = countNestedReplies(node);
-    const isCollapsed = !!collapsed[node.id];
+  if (!post) {
     return (
-      <div style={{ marginLeft: depth * 16, borderLeft: depth ? "2px solid #ece8df" : "none", paddingLeft: depth ? 8 : 0 }}>
-        <p>
-          <small>{new Date(node.createdAt).toLocaleString("zh-CN")}</small> - {node.content}
-        </p>
-        <div className="toolbar">
-          <button
-            type="button"
-            onClick={() => {
-              setReplyParentId(node.id);
-              setComment(`@回复: `);
-            }}
-          >
-            回复
-          </button>
-          {childCount > 0 ? (
-            <button
-              type="button"
-              onClick={() => setCollapsed((prev) => ({ ...prev, [node.id]: !prev[node.id] }))}
-            >
-              {isCollapsed ? `展开回复 (${childCount})` : `折叠回复 (${childCount})`}
-            </button>
-          ) : null}
+      <main className="post-detail-page">
+        <div className="card post-detail-article">
+          <p className="post-detail-loading">加载中…</p>
         </div>
-        {!isCollapsed
-          ? (node.children || []).map((child) => <CommentNode key={child.id} node={child} depth={depth + 1} />)
-          : null}
-      </div>
+      </main>
     );
   }
 
-  if (!post) return <main className="card">加载中...</main>;
+  const authorLabel = post.user?.username || "博主";
+  const likeCount =
+    (reactions || []).find((r) => r.emoji === "👍")?.count ?? 0;
 
   return (
-    <main>
-      <article className="card">
-        <h2 style={{ marginTop: 0 }}>{post.title || "无标题"}</h2>
-        <p>{post.content}</p>
-        <small>{new Date(post.createdAt).toLocaleString("zh-CN")}</small>
+    <main className="post-detail-page">
+      <article className="card post-detail-article">
+        <header className="post-detail-head">
+          <div className="post-detail-title-row">
+            <h1 className="post-detail-title">{post.title || "无标题"}</h1>
+            {isOwner ? (
+              <div className="post-detail-icon-actions">
+                <Link
+                  href={`/compose?edit=${post.id}`}
+                  className="post-detail-icon-btn"
+                  aria-label="编辑"
+                  title="编辑"
+                >
+                  <IconPencil />
+                </Link>
+                <button
+                  type="button"
+                  className="post-detail-icon-btn post-detail-icon-btn-danger"
+                  aria-label="删除"
+                  title="删除"
+                  onClick={deletePost}
+                >
+                  <IconTrash />
+                </button>
+              </div>
+            ) : null}
+          </div>
+          <div className="post-detail-meta">
+            <span className="post-detail-meta-item">
+              <IconUser className="post-detail-meta-icon" />
+              {authorLabel}
+            </span>
+            <span className="post-detail-meta-item">
+              <IconCalendar className="post-detail-meta-icon" />
+              <time dateTime={post.createdAt}>{formatPostDate(post.createdAt)}</time>
+            </span>
+          </div>
+          {post.tags?.length ? (
+            <div className="post-detail-tags">
+              {post.tags.map((t) => (
+                <span key={t.tag.id} className="post-detail-tag-pill">
+                  {t.tag.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </header>
+        {post.htmlRendered ? (
+          <div
+            className="post-detail-body"
+            dangerouslySetInnerHTML={{ __html: normalizeMediaUrl(post.htmlRendered) }}
+          />
+        ) : (
+          <div className="post-detail-body post-detail-body-plain">{post.content}</div>
+        )}
       </article>
       <section className="card">
-        <h3 style={{ marginTop: 0 }}>反应</h3>
+        <h3 style={{ marginTop: 0 }}>点赞</h3>
         <div className="toolbar">
-          {["👍", "❤️", "💡", "🤔"].map((emoji) => (
-            <button data-testid={reactionTestIds[emoji]} key={emoji} type="button" onClick={() => sendReaction(emoji)}>
-              {emoji}
-            </button>
-          ))}
-        </div>
-        <p>
-          {(interactions.reactions || []).map((r) => `${r.emoji} ${r.count}`).join("  ")}
-        </p>
-      </section>
-      <section className="card">
-        <h3 style={{ marginTop: 0 }}>评论</h3>
-        <div className="toolbar">
-          <input
-            data-testid="comment-input"
-            style={{ minWidth: 320 }}
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="输入评论"
-          />
-          <button data-testid="comment-submit" type="button" onClick={sendComment}>
-            发送
+          <button
+            data-testid={reactionTestId}
+            type="button"
+            onClick={sendLike}
+            aria-label="点赞"
+          >
+            👍
           </button>
-          {replyParentId ? (
-            <button type="button" onClick={() => setReplyParentId(null)}>
-              取消回复
-            </button>
-          ) : null}
         </div>
-        {(interactions.commentTree || []).map((node) => <CommentNode key={node.id} node={node} />)}
-        {message ? <p>{message}</p> : null}
+        <p className="post-like-count" data-testid="like-count">
+          👍 {likeCount}
+        </p>
       </section>
     </main>
   );

@@ -22,17 +22,6 @@ function getReactionKey({ postId, emoji, ipHash }) {
   return `reaction:${postId}:${emoji}:${ipHash}`;
 }
 
-function buildCommentTree(flatComments) {
-  const nodes = flatComments.map((c) => ({ ...c, children: [] }));
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const roots = [];
-  for (const node of nodes) {
-    if (node.parentId && byId.has(node.parentId)) byId.get(node.parentId).children.push(node);
-    else roots.push(node);
-  }
-  return roots;
-}
-
 async function consumeRateLimit(key, limit, windowSec) {
   if (!redis) {
     const now = Date.now();
@@ -57,54 +46,22 @@ router.get("/posts/:postId", async (req, res) => {
   });
   if (!post) return res.status(404).json({ message: "Post not found" });
 
-  const comments = await prisma.interaction.findMany({
-    where: { postId: post.id, type: "comment" },
-    orderBy: { createdAt: "asc" }
-  });
   const reactions = await prisma.interaction.groupBy({
     by: ["content"],
-    where: { postId: post.id, type: "reaction" },
+    where: { postId: post.id, type: "reaction", content: "👍" },
     _count: { _all: true }
   });
 
   return res.json({
-    comments,
-    commentTree: buildCommentTree(comments),
     reactions: reactions.map((r) => ({ emoji: r.content || "👍", count: r._count._all }))
   });
 });
 
-router.post("/posts/:postId/comments", async (req, res) => {
-  const { content, parentId } = req.body;
-  if (!content || String(content).trim().length === 0) {
-    return res.status(400).json({ message: "Comment content is required" });
-  }
-  const post = await prisma.post.findUnique({
-    where: { id: req.params.postId },
-    include: { user: { select: { settings: true } } }
-  });
-  if (!post || post.deletedAt) return res.status(404).json({ message: "Post not found" });
-  if (post.user?.settings?.interactionsEnabled === false) {
-    return res.status(403).json({ message: "Interactions disabled by author" });
-  }
-  const ipHash = hashIp(req.ip);
-  const ok = await consumeRateLimit(`rl:comment:${ipHash}:${post.id}`, 10, 60);
-  if (!ok) return res.status(429).json({ message: "评论过于频繁，请稍后再试" });
-
-  const item = await prisma.interaction.create({
-    data: {
-      postId: post.id,
-      type: "comment",
-      content: String(content).slice(0, 2000),
-      parentId: parentId || null,
-      ipHash
-    }
-  });
-  return res.status(201).json(item);
-});
-
 router.post("/posts/:postId/reactions", async (req, res) => {
   const emoji = String(req.body.emoji || "👍").slice(0, 16);
+  if (emoji !== "👍") {
+    return res.status(400).json({ message: "仅支持点赞" });
+  }
   const post = await prisma.post.findUnique({
     where: { id: req.params.postId },
     include: { user: { select: { settings: true } } }
