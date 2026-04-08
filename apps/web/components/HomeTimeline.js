@@ -31,7 +31,8 @@ export default function HomeTimeline({ initialPosts, tags }) {
   const debouncedQ = useDebouncedValue(q, 350);
   const [posts, setPosts] = useState(initialPosts);
   const [loading, setLoading] = useState(false);
-  const skipInitialFetch = useRef(true);
+  const hasInitialData = Array.isArray(initialPosts) && initialPosts.length > 0;
+  const skipInitialFetch = useRef(hasInitialData);
 
   useEffect(() => {
     const dq = debouncedQ.trim();
